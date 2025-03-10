@@ -1,0 +1,182 @@
+<!-- templates/chat.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Chatbot</title>
+    <!-- Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    />
+    <style>
+      body {
+        background-color: #f8f9fa; /* Light gray background for a modern look */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh; /* Full height for centering */
+        margin: 0; /* Remove default margin */
+      }
+      .chat-card {
+        border-radius: 0.5rem; /* Rounded corners */
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+        width: 100%; /* Full width on mobile */
+        max-width: 600px; /* Max width for larger screens */
+        height: 80vh; /* Fixed height for chat */
+      }
+      .chat-message {
+        max-width: 75%; /* Limit message width */
+        word-wrap: break-word; /* Break long words */
+      }
+      .bg-body-tertiary {
+        background-color: #e9ecef; /* Light gray for user messages */
+      }
+      .bg-warning {
+        background-color: #ffa900 !important; /* Custom warning color */
+      }
+      .card-body {
+        overflow-y: auto; /* Enable scrolling for chat messages */
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-card">
+      <div class="card-header d-flex justify-content-between align-items-center p-3" style="border-top: 4px solid #ffa900">
+        <h5 class="mb-0">Chat messages</h5>
+        <div class="d-flex flex-row align-items-center">
+          <span class="badge bg-warning me-3" id="messageCount">0</span>
+          <i class="fas fa-minus me-3 text-muted fa-xs"></i>
+          <i class="fas fa-comments me-3 text-muted fa-xs"></i>
+          <i class="fas fa-times text-muted fa-xs"></i>
+        </div>
+      </div>
+      <div class="card-body d-flex flex-column" style="position: relative; height: 500px" id="chatBox">
+        <ul id="messages" class="list-unstyled flex-grow-1">
+          <!-- Messages will be dynamically inserted here -->
+        </ul>
+      </div>
+      <div class="card-footer text-muted d-flex justify-content-start align-items-center p-3">
+        <div class="input-group mb-0">
+          <textarea class="form-control" id="messageInput" rows="2" placeholder="Type message" aria-label="Recipient's username" aria-describedby="button-addon2"></textarea>
+          <button class="btn btn-warning" type="button" id="sendButton" style="padding-top: 0.55rem">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+      let ws; // Declare WebSocket variable
+      let currentAiMessage; // Variable to hold the current AI message element
+      const reconnectInterval = 5000; // Time to wait before attempting to reconnect (in milliseconds)
+
+      // Function to create a new WebSocket connection
+      function createWebSocket() {
+        const wsUrl =
+          (window.location.protocol === "https:" ? "wss://" : "ws://") +
+          window.location.host +
+          "/chatbot/ws"; // Dynamic WebSocket URL
+        ws = new WebSocket(wsUrl); // Create a new WebSocket connection
+
+        // Add event listeners for the WebSocket
+        ws.onopen = function () {
+          console.log("WebSocket connection established.");
+        };
+
+        ws.onmessage = function (event) {
+          const messageData = JSON.parse(event.data); // Parse the incoming message
+          if (messageData.type === "response") {
+            // If the AI message element doesn't exist, create it
+            if (!currentAiMessage) {
+              currentAiMessage = document.createElement("li");
+              currentAiMessage.className = "d-flex justify-content-start mb-4"; // Class for AI message
+              currentAiMessage.innerHTML = `
+                <img src="https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-chat/ava5-bg.webp" alt="avatar" style="width: 45px; height: 100%;">
+                <div class="chat-message">
+                  <p class="small p-2 ms-3 mb-3 rounded-3 bg-body-tertiary">${formatMessage(messageData.content)}</p>
+                </div>
+              `;
+              document.getElementById("messages").appendChild(currentAiMessage); // Add the AI response to the list
+            } else {
+              // Append the new chunk of text to the existing AI message
+              currentAiMessage.querySelector(".chat-message p").innerHTML += formatMessage(messageData.content); // Append the AI response text
+            }
+            // Scroll to the bottom after receiving AI response
+            document.getElementById("chatBox").scrollTop =
+              document.getElementById("chatBox").scrollHeight; // Scroll to the bottom
+            console.log("Displayed AI response:", messageData.content); // Log displayed AI response
+            ws.send(JSON.stringify({ type: "ack", content: "Received chunk" }));
+            updateMessageCount();
+          }
+        };
+
+        ws.onclose = function () {
+          console.log("WebSocket connection closed. Attempting to reconnect...");
+          setTimeout(createWebSocket, reconnectInterval); // Attempt to reconnect after a delay
+        };
+
+        ws.onerror = function (error) {
+          console.error("WebSocket error:", error);
+        };
+      }
+
+      // Function to replace new lines with <br> tags
+      function formatMessage(content) {
+        return content.replace(/\n/g, '<br>'); // Replace new lines with <br>
+      }
+
+      // Send button click event
+      document.getElementById("sendButton").onclick = function () {
+        const input = document.getElementById("messageInput");
+        const messageContent = input.value; // Get the message content from the input
+        if (messageContent) {
+          // Display the user's message immediately
+          const userMessage = document.createElement("li");
+          userMessage.className = "d-flex justify-content-end mb-4"; // Class for user message
+          userMessage.innerHTML = `
+            <div class="chat-message">
+              <p class="small p-2 me-3 mb-3 text-white rounded-3 bg-warning">${formatMessage(messageContent)}</p>
+            </div>
+            <img src="https://mdbcdn.b-cdn.net/img/Photos/new-templates/bootstrap-chat/ava6-bg.webp" alt="avatar" style="width: 45px; height: 100%;">
+          `;
+          document.getElementById("messages").appendChild(userMessage); // Add the message to the list
+          // Scroll to the bottom after displaying user message
+          document.getElementById("chatBox").scrollTop =
+            document.getElementById("chatBox").scrollHeight; // Scroll to the bottom
+
+          // Reset the current AI message for the new question
+          currentAiMessage = null;
+
+          // Send the message to the server
+          ws.send(
+            JSON.stringify({
+              type: "message",
+              content: messageContent,
+            })
+          );
+          console.log("Sent message:", messageContent); // Log sent message
+          input.value = ""; // Clear the input field
+          updateMessageCount();
+        }
+      };
+
+      // Function to update message count
+      function updateMessageCount() {
+        const messageCount =
+          document.getElementById("messages").children.length;
+        document.getElementById("messageCount").textContent = messageCount;
+      }
+
+      // Initialize WebSocket connection
+      createWebSocket();
+    </script>
+  </body>
+</html>

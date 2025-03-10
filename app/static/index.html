@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Blob Storage API</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            text-align: center;
+            color: #0078d4;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #0078d4;
+            margin-top: 20px;
+            border-bottom: 2px solid #0078d4;
+            padding-bottom: 5px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        input[type="file"],
+        input[type="text"],
+        button {
+            padding: 12px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus,
+        input[type="file"]:focus {
+            border-color: #0078d4;
+            outline: none;
+        }
+        button {
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        button:hover {
+            background-color: #005a9e;
+            transform: translateY(-2px);
+        }
+        #fileList {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 5px 0;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.3s;
+        }
+        .file-item:hover {
+            background-color: #f1f1f1;
+        }
+        .file-name {
+            cursor: pointer;
+            color: #0078d4;
+            text-decoration: underline;
+            transition: color 0.3s;
+        }
+        .file-name:hover {
+            color: #005a9e;
+        }
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+        }
+        .search-container {
+            margin-bottom: 20px;
+        }
+        .search-container input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .search-container input:focus {
+            border-color: #0078d4;
+            outline: none;
+        }
+        /* Toast Styles */
+        .toast {
+            min-width: 300px;
+            border-radius: 8px;
+            opacity: 0.9;
+        }
+        .toast-body {
+            font-size: 16px;
+            color: #333;
+        }
+        .toast-success {
+            background-color: #28a745; /* Green */
+            color: white; /* Text color */
+        }
+        .toast-error {
+            background-color: #dc3545; /* Red */
+            color: white; /* Text color */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Azure Blob Storage File Management</h1>
+
+        <h2>Upload File</h2>
+        <form id="uploadForm">
+            <input type="file" id="fileInput" required>
+            <button type="submit">Upload</button>
+        </form>
+
+        <h2>List Files</h2>
+        <div class="search-container">
+            <input type="text" id="searchInput" placeholder="Search files..." oninput="filterFiles()">
+        </div>
+        <div id="fileCount"></div> <!-- Display file count here -->
+        <div id="fileList"></div>
+        <div class="pagination">
+            <button id="prevPageButton" style="display: none;">Previous</button>
+            <button id="nextPageButton" style="display: none;">Next</button>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast" style="position: fixed; top: 20px; right: 20px; z-index: 1050; display: none;">
+        <div class="toast-body"></div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        const apiUrl = `${window.location.origin}/api/v1/azure_blob`;
+        let currentPage = 1;
+        const pageSize = 5;
+        let allFiles = []; // Store all files for filtering
+
+        // Function to show toast notifications
+        function showToast(message, type = 'success') {
+            const toastBody = document.querySelector('.toast-body');
+            toastBody.textContent = message;
+            const toastElement = document.getElementById('toast');
+            toastElement.className = `toast ${type === 'success' ? 'toast-success' : 'toast-error'}`;
+            toastElement.style.display = 'block';
+            $(toastElement).toast({ delay: 3000 });
+            $(toastElement).toast('show');
+        }
+
+        // Upload file
+        document.getElementById('uploadForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const fileInput = document.getElementById('fileInput');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch(`${apiUrl}/upload/`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                showToast(result.message); // Show toast instead of alert
+                listFiles(); // Refresh the file list after upload
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                showToast('Error uploading file', 'error'); // Show toast for error
+            }
+        });
+
+        // List all files once
+        async function listFiles() {
+            try {
+                const response = await fetch(`${apiUrl}/list/`);
+                const result = await response.json();
+                allFiles = result.blobs; // Store all files for filtering
+                displayFiles(allFiles);
+                updateFileCount(allFiles.length); // Update file count
+                updatePaginationButtons();
+            } catch (error) {
+                console.error('Error listing files:', error);
+                showToast('Error listing files', 'error'); // Show toast for error
+            }
+        }
+
+        // Display files with pagination
+        function displayFiles(files) {
+            const fileListDiv = document.getElementById('fileList');
+            fileListDiv.innerHTML = '<h3>Files:</h3>';
+            if (files.length > 0) {
+                const startIndex = (currentPage - 1) * pageSize;
+                const endIndex = startIndex + pageSize;
+                const filesToDisplay = files.slice(startIndex, endIndex);
+                filesToDisplay.forEach(file => {
+                    fileListDiv.innerHTML += `
+                        <div class="file-item">
+                            <span class="file-name" onclick="previewFile('${file}')">${file}</span>
+                            <button onclick="downloadFile('${file}')">Download</button>
+                        </div>
+                    `;
+                });
+            } else {
+                fileListDiv.innerHTML += '<p>No files found.</p>';
+            }
+        }
+
+        // Filter files based on search input
+        function filterFiles() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const filteredFiles = allFiles.filter(file => file.toLowerCase().includes(searchTerm));
+            displayFiles(filteredFiles);
+        }
+
+        // Download file function
+        function downloadFile(fileName) {
+            window.location.href = `${apiUrl}/download/${fileName}`;
+        }
+
+        // Preview file function
+        function previewFile(fileName) {
+            const previewUrl = `${apiUrl}/download/${fileName}`;
+            window.open(previewUrl, '_blank'); // Open in a new tab
+        }
+
+        // Pagination buttons
+        document.getElementById('nextPageButton').addEventListener('click', () => {
+            currentPage++;
+            displayFiles(allFiles);
+            updatePaginationButtons();
+        });
+
+        document.getElementById('prevPageButton').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                displayFiles(allFiles);
+                updatePaginationButtons();
+            }
+        });
+
+        // Update file count
+        function updateFileCount(count) {
+            const fileCountDiv = document.getElementById('fileCount');
+            fileCountDiv.textContent = `Total Files: ${count}`;
+        }
+
+        // Update pagination buttons
+        function updatePaginationButtons() {
+            const totalPages = Math.ceil(allFiles.length / pageSize);
+            document.getElementById('nextPageButton').style.display = currentPage < totalPages ? 'block' : 'none';
+            document.getElementById('prevPageButton').style.display = currentPage > 1 ? 'block' : 'none';
+        }
+
+        // Initial file list load
+        listFiles();
+    </script>
+</body>
+</html>
