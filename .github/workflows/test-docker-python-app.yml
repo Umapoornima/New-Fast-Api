@@ -1,0 +1,49 @@
+name: Deploy FastAPI App with Docker to Azure App Service
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  AZURE_WEBAPP_NAME: test-viziapps-fast-api
+  AZURE_RESOURCE_GROUP: New-rg
+  ACR_NAME: fastapiacr1264
+  IMAGE_NAME: fastapi-app
+  DOCKER_TAG: v${{ github.run_number }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Log in to Azure with Service Principal
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Azure CLI - Login to ACR
+      run: az acr login --name $ACR_NAME
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t $ACR_NAME.azurecr.io/$IMAGE_NAME:$DOCKER_TAG .
+        docker push $ACR_NAME.azurecr.io/$IMAGE_NAME:$DOCKER_TAG
+
+    - name: Deploy to Azure App Service (using Docker image)
+      run: |
+        az webapp config container set \
+          --name $AZURE_WEBAPP_NAME \
+          --resource-group $AZURE_RESOURCE_GROUP \
+          --docker-custom-image-name $ACR_NAME.azurecr.io/$IMAGE_NAME:$DOCKER_TAG \
+          --docker-registry-server-url https://$ACR_NAME.azurecr.io
+
+        az webapp restart \
+          --name $AZURE_WEBAPP_NAME \
+          --resource-group $AZURE_RESOURCE_GROUP
