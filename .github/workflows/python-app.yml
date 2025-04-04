@@ -44,6 +44,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
+
       - name: Deploy Docker image to Azure App Service
         run: |
           az webapp config container set \
