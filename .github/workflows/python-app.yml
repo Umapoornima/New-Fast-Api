@@ -3,7 +3,7 @@ name: Build and Deploy FastAPI using GHCR and Azure App Service
 on:
   push:
     branches:
-      - main
+      - dev
 
 env:
   IMAGE_NAME: fastapi-app
