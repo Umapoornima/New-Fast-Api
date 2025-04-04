@@ -1,55 +1,55 @@
-name: Build and Deploy FastAPI using Docker and Service Principal
+name: Build and Deploy FastAPI App using Docker
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+
+env:
+  ACR_NAME: fastapiacr1264.azurecr.io
+  IMAGE_NAME: fastapi-app
+  IMAGE_TAG: v3
+  RESOURCE_GROUP: New-rg
+  APP_SERVICE_NAME: fastapi-linux-webapp
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Log in to Azure using Service Principal
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Log in to Azure Container Registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ env.ACR_NAME }} \
+            -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
-    - name: Log in to Azure using Service Principal
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build Docker image
+        run: |
+          docker build -t $ACR_NAME/$IMAGE_NAME:$IMAGE_TAG .
 
-    - name: Log in to ACR
-      run: |
-        az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+      - name: Push Docker image to ACR
+        run: |
+          docker push $ACR_NAME/$IMAGE_NAME:$IMAGE_TAG
 
-    - name: Build and push Docker image to ACR
-      run: |
-        IMAGE_NAME=fastapi-app
-        IMAGE_TAG=v3
-        ACR_NAME=${{ secrets.AZURE_CONTAINER_REGISTRY }}
+      - name: Deploy container to Azure Web App
+        run: |
+          az webapp config container set \
+            --name $APP_SERVICE_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --docker-custom-image-name $ACR_NAME/$IMAGE_NAME:$IMAGE_TAG \
+            --docker-registry-server-url https://$ACR_NAME \
+            --docker-registry-server-user ${{ secrets.REGISTRY_USERNAME }} \
+            --docker-registry-server-password ${{ secrets.REGISTRY_PASSWORD }}
 
-        docker build -t $ACR_NAME.azurecr.io/$IMAGE_NAME:$IMAGE_TAG .
-        docker push $ACR_NAME.azurecr.io/$IMAGE_NAME:$IMAGE_TAG
-
-    - name: Deploy to Azure App Service (Linux Container)
-      run: |
-        az webapp config container set \
-          --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-          --container-image-name ${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io/fastapi-app:v3 \
-          --enable-app-service-storage false
+      - name: Restart Azure Web App
+        run: |
+          az webapp restart --name $APP_SERVICE_NAME --resource-group $RESOURCE_GROUP
