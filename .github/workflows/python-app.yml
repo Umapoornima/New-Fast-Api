@@ -1,37 +1,39 @@
-name: Deploy FastAPI App to Azure App Service
+name: CI/CD - FastAPI to Azure using GHCR
 
 on:
   push:
-    branches:
-      - main  # Triggers deployment on push to the main branch
-  pull_request:
-    branches:
-      - main  # Optionally triggers deployment on pull requests to the main branch
+    branches: [dev]
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+    - name: Log in to GHCR
+      run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
 
-    - name: Install dependencies
+    - name: Build and Push Docker Image to GHCR
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USERNAME }}/fastapi-app:v1
+        docker build -t $IMAGE_NAME .
+        docker push $IMAGE_NAME
 
-    - name: Archive project files
-      run: zip -r my-fastapi-app.zip . -x "*.git*"
-
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v2
+    - name: Azure Login via SP
+      uses: azure/login@v1
       with:
-        app-name: test-viziapps-fast-api
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: ./my-fastapi-app.zip
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Configure App Service to use GHCR image
+      run: |
+        az webapp config container set \
+          --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+          --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+          --container-image-name ghcr.io/${{ secrets.GHCR_USERNAME }}/fastapi-app:v1 \
+          --container-registry-server-url https://ghcr.io \
+          --container-registry-user ${{ secrets.GHCR_USERNAME }} \
+          --container-registry-password ${{ secrets.GHCR_TOKEN }}
