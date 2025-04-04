@@ -1,4 +1,4 @@
-name: CI/CD - FastAPI to Azure using GHCR
+name: Build and Deploy FastAPI to Azure via GHCR
 
 on:
   push:
@@ -8,32 +8,39 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
+    env:
+      IMAGE_TAG: v1
+      GHCR_REPO: ghcr.io/${{ secrets.GHCR_USERNAME }}/fastapi-app
+
     steps:
-    - name: Checkout Code
+    - name: Checkout code
       uses: actions/checkout@v3
 
     - name: Log in to GHCR
-      run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
-
-    - name: Build and Push Docker Image to GHCR
       run: |
-        IMAGE_NAME=ghcr.io/${{ secrets.GHCR_USERNAME }}/fastapi-app:v1
-        docker build -t $IMAGE_NAME .
-        docker push $IMAGE_NAME
+        echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} --password-stdin
 
-    - name: Azure Login via SP
+    - name: Build Docker image
+      run: |
+        docker build -t $GHCR_REPO:$IMAGE_TAG .
+
+    - name: Push Docker image to GHCR
+      run: |
+        docker push $GHCR_REPO:$IMAGE_TAG
+
+    - name: Azure Login
       uses: azure/login@v1
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Configure App Service to use GHCR image
+    - name: Deploy container to Azure App Service
       run: |
         az webapp config container set \
           --name ${{ secrets.AZURE_WEBAPP_NAME }} \
           --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-          --container-image-name ghcr.io/${{ secrets.GHCR_USERNAME }}/fastapi-app:v1 \
-          --container-registry-server-url https://ghcr.io \
-          --container-registry-user ${{ secrets.GHCR_USERNAME }} \
-          --container-registry-password ${{ secrets.GHCR_TOKEN }}
+          --docker-custom-image-name $GHCR_REPO:$IMAGE_TAG \
+          --docker-registry-server-url https://ghcr.io \
+          --docker-registry-server-user ${{ secrets.GHCR_USERNAME }} \
+          --docker-registry-server-password ${{ secrets.GHCR_TOKEN }}
