@@ -3,12 +3,12 @@ name: CI/CD - FastAPI Docker App with GHCR and Azure
 on:
   push:
     branches:
-      - dev
+      - dev  # Or main, depending on your flow
 
 env:
   IMAGE_NAME: fastapi-app
   IMAGE_TAG: v1
-  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # Use all lowercase
+  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # must be lowercase
 
 jobs:
   build-and-deploy:
@@ -42,6 +42,7 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
 
       - name: Deploy Docker image to Azure App Service
         run: |
