@@ -3,12 +3,12 @@ name: CI/CD - FastAPI Docker App with GHCR and Azure
 on:
   push:
     branches:
-      - dev  # Or main, depending on your flow
+      - dev
 
 env:
   IMAGE_NAME: fastapi-app
   IMAGE_TAG: v1
-  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # must be lowercase
+  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # lowercase as required
 
 jobs:
   build-and-deploy:
@@ -36,14 +36,10 @@ jobs:
           docker build -t $GHCR_REPO:$IMAGE_TAG .
           docker push $GHCR_REPO:$IMAGE_TAG
 
-      - name: Azure Login
+      - name: Azure Login using JSON Credentials
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
-
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy Docker image to Azure App Service
         run: |
