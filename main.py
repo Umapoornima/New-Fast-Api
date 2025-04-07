@@ -35,4 +35,4 @@ app.include_router(chatbot.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Fast API Server is Running!!."}
+    return {"message": "Server is running."}
