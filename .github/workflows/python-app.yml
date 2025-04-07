@@ -1,4 +1,4 @@
-name: CI/CD - FastAPI Docker App with GHCR and Azure
+name: CI/CD - FastAPI Docker App with GHCR and Azuree
 
 on:
   push:
