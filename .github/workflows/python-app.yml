@@ -1,4 +1,4 @@
-name: CI/CD - FastAPI Docker App with GHCR and Azure 
+name: CI/CD - FastAPI Docker App with GHCR and Azure
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 env:
   IMAGE_NAME: fastapi-app
   IMAGE_TAG: v1
-  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # lowercase as required
+  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # Make sure this is all lowercase
 
 jobs:
   build-and-deploy:
@@ -36,7 +36,7 @@ jobs:
           docker build -t $GHCR_REPO:$IMAGE_TAG .
           docker push $GHCR_REPO:$IMAGE_TAG
 
-      - name: Azure Login using JSON Credentials
+      - name: Azure Login via credentials JSON
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -50,3 +50,9 @@ jobs:
             --docker-registry-server-url https://ghcr.io \
             --docker-registry-server-user umapoornima \
             --docker-registry-server-password ${{ secrets.GHCR_TOKEN }}
+
+      - name: Restart Azure App Service (optional but recommended)
+        run: |
+          az webapp restart \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
