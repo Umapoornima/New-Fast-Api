@@ -1,4 +1,4 @@
-name: CI/CD - FastAPI Docker App with GHCR and Azuree
+name: CI/CD - FastAPI Docker App with GHCR and Azure (Windows)
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 env:
   IMAGE_NAME: fastapi-app
   IMAGE_TAG: v1
-  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # Make sure this is all lowercase
+  GHCR_REPO: ghcr.io/umapoornima/fastapi-app  # Must be lowercase
 
 jobs:
   build-and-deploy:
@@ -27,32 +27,37 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+        shell: pwsh
 
       - name: Log in to GitHub Container Registry (GHCR)
         run: echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u umapoornima --password-stdin
+        shell: pwsh
 
       - name: Build and push Docker image to GHCR
         run: |
-          docker build -t $GHCR_REPO:$IMAGE_TAG .
-          docker push $GHCR_REPO:$IMAGE_TAG
+          docker build -t "${env:GHCR_REPO}:${env:IMAGE_TAG}" .
+          docker push "${env:GHCR_REPO}:${env:IMAGE_TAG}"
+        shell: pwsh
 
       - name: Azure Login via credentials JSON
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy Docker image to Azure App Service
+      - name: Deploy Docker image to Azure App Service (Windows)
         run: |
-          az webapp config container set \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --docker-custom-image-name $GHCR_REPO:$IMAGE_TAG \
-            --docker-registry-server-url https://ghcr.io \
-            --docker-registry-server-user umapoornima \
-            --docker-registry-server-password ${{ secrets.GHCR_TOKEN }}
+          az webapp config container set `
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" `
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" `
+            --container-image-name "${env:GHCR_REPO}:${env:IMAGE_TAG}" `
+            --container-registry-url https://ghcr.io `
+            --container-registry-user umapoornima `
+            --container-registry-password "${{ secrets.GHCR_TOKEN }}"
+        shell: pwsh
 
-      - name: Restart Azure App Service (optional but recommended)
+      - name: Restart Azure App Service
         run: |
-          az webapp restart \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }}
+          az webapp restart `
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" `
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}"
+        shell: pwsh
